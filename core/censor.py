@@ -173,7 +173,7 @@ def detect_spoken_segments(
         if p_len == 1:
             target_kw = phrase[0]
             for idx, (st, en, w_text) in enumerate(all_words):
-                if target_kw in w_text or w_text in target_kw:
+                if target_kw == w_text or target_kw in w_text:
                     cut_intervals.append((st, en))
         else:
             for idx in range(len(all_words) - p_len + 1):
@@ -528,7 +528,7 @@ def overlay_stickers(
 
 def process_video_censorship(
     video_path: str,
-    keywords_str: str = "tiktok, tik tok, tóp tóp, toptop, douyin",
+    keywords_str: str = "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ",
     custom_sticker_path: Optional[str] = None,
     log_callback: Optional[Callable[[str], None]] = None
 ) -> bool:

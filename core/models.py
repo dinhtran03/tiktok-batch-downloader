@@ -57,5 +57,5 @@ class DownloadOptions:
     limit_videos: Optional[int] = None  # None = all videos
     naming_template: str = "{user}_{id}"
     enable_censorship: bool = False
-    censor_keywords: str = "tiktok, tik tok, tóp tóp, toptop, douyin"
+    censor_keywords: str = "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ"
     custom_sticker_path: Optional[str] = None

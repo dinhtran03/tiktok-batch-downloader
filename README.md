@@ -32,15 +32,15 @@
 
 ---
 
-## 🛡️ Tính Năng Tự Động Lọc Từ Khóa Nhạy Cảm & Bản Quyền ("tiktok")
+## 🛡️ Tính Năng Tự Động Lọc Từ Khóa Nhạy Cảm & Bản Quyền ("tiktok", "cháy", "nổ", "tiktokshop")
 
 Ứng dụng tích hợp bộ đôi công nghệ AI tiên tiến:
 1. **Trí tuệ nhân tạo Nhận diện Giọng nói (Whisper AI):**
    - Tự động nhận diện giọng nói trong video với độ chính xác theo từng từ (word-level timestamps).
-   - Khi phát hiện người nói phát âm từ "tiktok", "tik tok", "tóp tóp", "douyin", hệ thống sẽ **cắt bỏ hoàn toàn cả hình ảnh lẫn âm thanh** đoạn đó (video được cắt ngắn lại đồng bộ khung hình mượt mà).
+   - Khi phát hiện người nói phát âm các từ khóa nhạy cảm: **`tiktok`**, **`tik tok`**, **`tóp tóp`**, **`douyin`**, **`tiktokshop`**, **`tiktok shop`**, **`cháy`**, **`nổ`**, hệ thống sẽ **cắt bỏ hoàn toàn cả hình ảnh lẫn âm thanh** đoạn đó (video được cắt ngắn lại đồng bộ khung hình mượt mà).
 2. **Thị giác Máy tính Nhận diện Văn bản (RapidOCR):**
-   - Quét từng khung hình trên video để nhận diện vị trí và thời lượng xuất hiện chữ "tiktok" / "tik tok".
-   - Tự động dán đè Sticker/Logo lên đúng tọa độ chữ xuất hiện để che hoàn toàn logo chữ TikTok.
+   - Quét từng khung hình trên video để nhận diện vị trí và thời lượng xuất hiện các từ khóa hoặc chữ "tiktok", "tiktokshop", "cháy", "nổ".
+   - Tự động dán đè Sticker/Logo lên đúng tọa độ chữ xuất hiện để che hoàn toàn.
    - Cho phép chọn ảnh Logo/Sticker tùy chỉnh từ máy tính (`.png`, `.jpg`) hoặc tự động dùng sticker ngôi sao mặc định (`assets/default_sticker.png`).
 3. **Hoàn Toàn Là Tùy Chọn (Optional):**
    - Mặc định tính năng này **TẮT** (Bỏ tick) để ứng dụng tải video gốc nguyên bản siêu tốc.
