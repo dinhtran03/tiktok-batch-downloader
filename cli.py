@@ -103,8 +103,8 @@ def main():
     parser.add_argument(
         "--censor-keywords",
         type=str,
-        default="tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ",
-        help="Danh sách từ khóa cần lọc, phân cách bởi dấu phẩy (mặc định: 'tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ')"
+        default="tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ",
+        help="Danh sách từ khóa cần lọc, phân cách bởi dấu phẩy (mặc định: 'tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ')"
     )
     parser.add_argument(
         "--sticker",

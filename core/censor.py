@@ -528,7 +528,7 @@ def overlay_stickers(
 
 def process_video_censorship(
     video_path: str,
-    keywords_str: str = "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ",
+    keywords_str: str = "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ",
     custom_sticker_path: Optional[str] = None,
     log_callback: Optional[Callable[[str], None]] = None
 ) -> bool:

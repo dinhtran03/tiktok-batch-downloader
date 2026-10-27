@@ -53,7 +53,7 @@ class TikTokDownloaderApp(ctk.CTk):
 
         # Tùy chọn lọc từ khóa nhạy cảm / bản quyền ('tiktok')
         self.enable_censor_var = ctk.BooleanVar(value=False)
-        self.censor_keywords_var = ctk.StringVar(value="tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ")
+        self.censor_keywords_var = ctk.StringVar(value="tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ")
         self.custom_sticker_var = ctk.StringVar(value="")
 
         # Xây dựng giao diện
@@ -930,7 +930,7 @@ class TikTokDownloaderApp(ctk.CTk):
                         max_workers=num_workers,
                         limit_videos=cur_limit,
                         enable_censorship=bool(self.enable_censor_var.get()),
-                        censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ",
+                        censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ",
                         custom_sticker_path=self.custom_sticker_var.get().strip() or None
                     )
 
@@ -1078,7 +1078,7 @@ class TikTokDownloaderApp(ctk.CTk):
                     skip_existing=bool(self.opt_skip_existing.get()),
                     max_workers=num_workers,
                     enable_censorship=bool(self.enable_censor_var.get()),
-                    censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, cháy, nổ",
+                    censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ",
                     custom_sticker_path=self.custom_sticker_var.get().strip() or None
                 )
 
