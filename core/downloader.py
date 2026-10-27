@@ -170,6 +170,20 @@ class BatchDownloader:
 
         ffmpeg_bin = shutil.which("ffmpeg")
         if not ffmpeg_bin:
+            # Tìm trong thư mục trích xuất của PyInstaller hoặc thư mục chứa file .exe
+            for cand_dir in [
+                getattr(sys, "_MEIPASS", ""),
+                os.path.dirname(sys.executable),
+                os.getcwd(),
+                os.path.join(os.getcwd(), "tools"),
+            ]:
+                if cand_dir:
+                    f_cand = os.path.join(cand_dir, "ffmpeg.exe")
+                    if os.path.exists(f_cand):
+                        ffmpeg_bin = f_cand
+                        break
+
+        if not ffmpeg_bin:
             self.log(f"⚠️ Không tìm thấy ffmpeg trên hệ thống để ghép slide ảnh cho #{item.id}")
             return False
 

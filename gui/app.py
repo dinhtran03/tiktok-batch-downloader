@@ -27,6 +27,19 @@ class TikTokDownloaderApp(ctk.CTk):
         self.geometry("1020x760")
         self.minsize(880, 660)
 
+        # Thiết lập biểu tượng ứng dụng (icon)
+        for icon_path in [
+            os.path.join(getattr(sys, "_MEIPASS", ""), "app_icon.ico"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app_icon.ico"),
+            os.path.join(os.getcwd(), "app_icon.ico"),
+        ]:
+            if os.path.exists(icon_path):
+                try:
+                    self.iconbitmap(icon_path)
+                    break
+                except Exception:
+                    pass
+
         # Trạng thái tải
         self.active_downloader: Optional[BatchDownloader] = None
         self.worker_thread: Optional[threading.Thread] = None
