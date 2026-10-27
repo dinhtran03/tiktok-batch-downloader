@@ -20,13 +20,15 @@ def build():
             except Exception as e:
                 print(f"⚠️ Không thể xóa {folder}: {e}")
 
-    # 2. Kiểm tra icon
-    icon_arg = []
+    # 2. Kiểm tra icon và assets
+    data_args = []
     if os.path.exists("app_icon.ico"):
-        icon_arg = [
+        data_args.extend([
             "--icon=app_icon.ico",
             "--add-data=app_icon.ico;."
-        ]
+        ])
+    if os.path.exists("assets"):
+        data_args.append("--add-data=assets;assets")
 
     # 3. Lệnh PyInstaller đóng gói thành 1 file .exe duy nhất không hiện cửa sổ đen
     cmd = [
@@ -39,12 +41,17 @@ def build():
         "--collect-all=gallery_dl",
         "--collect-all=yt_dlp",
         "--collect-all=curl_cffi",
+        "--collect-all=rapidocr_onnxruntime",
+        "--collect-all=faster_whisper",
+        "--collect-all=ctranslate2",
         "--hidden-import=PIL",
         "--hidden-import=darkdetect",
         "--hidden-import=tkinter",
         "--hidden-import=tkinter.filedialog",
         "--hidden-import=tkinter.messagebox",
-    ] + icon_arg + ["main.py"]
+        "--hidden-import=cv2",
+        "--hidden-import=onnxruntime",
+    ] + data_args + ["main.py"]
 
     print("\n📦 Đang biên dịch mã nguồn và đóng gói toàn bộ thư viện...")
     print("Lệnh chạy:", " ".join(cmd))
@@ -55,10 +62,17 @@ def build():
     if res.returncode == 0:
         exe_path = os.path.join(script_dir, "dist", "TikTokDownloaderPro.exe")
         if os.path.exists(exe_path):
+            root_exe = os.path.join(script_dir, "TikTokDownloaderPro.exe")
+            try:
+                shutil.copy2(exe_path, root_exe)
+            except Exception:
+                pass
+
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             print("\n" + "=" * 65)
             print("🎉 ĐÓNG GÓI THÀNH CÔNG RỰC RỠ!")
             print(f"📁 Tệp thực thi độc lập: {exe_path}")
+            print(f"📁 Tệp thực thi tại thư mục gốc: {root_exe}")
             print(f"⚖️ Dung lượng: {size_mb:.1f} MB")
             print("👉 Bạn chỉ cần copy duy nhất file TikTokDownloaderPro.exe sang bất kỳ máy tính nào là có thể chạy trực tiếp ngay, không cần cài đặt Python hay thư viện!")
             print("=" * 65)

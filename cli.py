@@ -95,6 +95,23 @@ def main():
         action="store_true",
         help="Tải lại ngay cả khi tệp đã tồn tại (không bỏ qua)"
     )
+    parser.add_argument(
+        "--censor",
+        action="store_true",
+        help="Kích hoạt tự động lọc từ nhạy cảm 'tiktok' (Cắt đoạn nói & Che logo chữ bằng sticker)"
+    )
+    parser.add_argument(
+        "--censor-keywords",
+        type=str,
+        default="tiktok, tik tok, tóp tóp, toptop, douyin",
+        help="Danh sách từ khóa cần lọc, phân cách bởi dấu phẩy (mặc định: 'tiktok, tik tok, tóp tóp, toptop, douyin')"
+    )
+    parser.add_argument(
+        "--sticker",
+        type=str,
+        default=None,
+        help="Đường dẫn file ảnh Logo / Sticker che chữ (mặc định: dùng sticker có sẵn trong app)"
+    )
 
     args = parser.parse_args()
 
@@ -161,7 +178,10 @@ def main():
                 save_metadata=args.meta,
                 skip_existing=not args.force,
                 max_workers=num_workers,
-                limit_videos=args.limit
+                limit_videos=args.limit,
+                enable_censorship=args.censor,
+                censor_keywords=args.censor_keywords,
+                custom_sticker_path=args.sticker
             )
 
             downloader = BatchDownloader(options, browser_cookie=args.browser)
@@ -243,7 +263,10 @@ def main():
         save_metadata=args.meta,
         skip_existing=not args.force,
         max_workers=num_workers,
-        limit_videos=args.limit
+        limit_videos=args.limit,
+        enable_censorship=args.censor,
+        censor_keywords=args.censor_keywords,
+        custom_sticker_path=args.sticker
     )
 
     downloader = BatchDownloader(options, browser_cookie=args.browser)

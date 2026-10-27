@@ -32,6 +32,24 @@
 
 ---
 
+## 🛡️ Tính Năng Tự Động Lọc Từ Khóa Nhạy Cảm & Bản Quyền ("tiktok")
+
+Ứng dụng tích hợp bộ đôi công nghệ AI tiên tiến:
+1. **Trí tuệ nhân tạo Nhận diện Giọng nói (Whisper AI):**
+   - Tự động nhận diện giọng nói trong video với độ chính xác theo từng từ (word-level timestamps).
+   - Khi phát hiện người nói phát âm từ "tiktok", "tik tok", "tóp tóp", "douyin", hệ thống sẽ **cắt bỏ hoàn toàn cả hình ảnh lẫn âm thanh** đoạn đó (video được cắt ngắn lại đồng bộ khung hình mượt mà).
+2. **Thị giác Máy tính Nhận diện Văn bản (RapidOCR):**
+   - Quét từng khung hình trên video để nhận diện vị trí và thời lượng xuất hiện chữ "tiktok" / "tik tok".
+   - Tự động dán đè Sticker/Logo lên đúng tọa độ chữ xuất hiện để che hoàn toàn logo chữ TikTok.
+   - Cho phép chọn ảnh Logo/Sticker tùy chỉnh từ máy tính (`.png`, `.jpg`) hoặc tự động dùng sticker ngôi sao mặc định (`assets/default_sticker.png`).
+3. **Hoàn Toàn Là Tùy Chọn (Optional):**
+   - Mặc định tính năng này **TẮT** (Bỏ tick) để ứng dụng tải video gốc nguyên bản siêu tốc.
+   - Khi bạn tick chọn ô **"✂️ Lọc nhạy cảm 'tiktok'"**, ứng dụng mới kích hoạt quy trình lọc cho các video tải về.
+   - **Giao diện GUI:** Có thể bật/tắt nhanh ngay trên màn hình chính hoặc vào Tab **"⚙️ Tăng Tốc & Cài Đặt"** để chỉnh ảnh Logo và danh sách từ khóa.
+   - **Dòng lệnh CLI:** Thêm cờ `--censor` (kèm `--sticker <ảnh.png>` và `--censor-keywords <từ_khóa>`).
+
+---
+
 ## 📁 Quy Chuẩn Đặt Tên Tệp & Xuất Danh Sách Tên Video
 
 1. **Định dạng tên video lưu trữ:**
@@ -61,7 +79,6 @@ Khi chuyển thư mục ứng dụng này sang một máy tính Windows khác:
 
 ### 2. Các bước chuyển và chạy:
 1. **Copy thư mục ứng dụng** sang thiết bị mới.
-   - *(Mẹo: Bạn có thể bỏ qua thư mục `.venv` khi copy để tiết kiệm dung lượng và thời gian chép file, vì `.venv` gắn liền với đường dẫn máy cũ).*
 2. **Nhấp đúp vào file `run_gui.bat`:**
    - Ứng dụng sẽ **tự động kiểm tra**: Nếu phát hiện đây là máy mới hoặc chưa có thư viện, script sẽ **tự động tạo môi trường và tự cài đặt toàn bộ thư viện cần thiết (`requirements.txt`) trong 1 phút**, sau đó tự mở ứng dụng lên!
    - Bạn **không cần phải gõ bất kỳ câu lệnh nào bằng tay**.
@@ -70,45 +87,30 @@ Khi chuyển thư mục ứng dụng này sang một máy tính Windows khác:
 
 ## 🚀 Hướng Dẫn Khởi Chạy Nhanh (1 Click Trên Windows)
 
-### Cách 1: Chạy Giao Diện Đồ Họa (GUI)
+### Cách 1: Chạy File Cài Đặt Trực Tiếp (.EXE)
+- Chạy trực tiếp file **`TikTokDownloaderPro.exe`** (không cần cài Python hay thư viện).
+
+### Cách 2: Chạy Giao Diện Đồ Họa (GUI)
 - Nhấp đúp chuột vào file: **`run_gui.bat`**
 - Trong tab **"📺 Tải Danh Sách Kênh (Channels)"**, bạn có thể:
   - Dán danh sách nhiều kênh TikTok hoặc `@username` (mỗi kênh 1 dòng hoặc cách nhau bằng dấu phẩy).
   - Hoặc bấm nút **"📂 Nhập tệp .txt"** để chọn tệp danh sách các kênh cần tải.
   - Chọn số lượng video tải mỗi kênh (mặc định: Toàn bộ kênh).
+  - Tùy chọn tick vào **"✂️ Lọc nhạy cảm 'tiktok'"** nếu muốn tự động cắt âm thanh và che logo chữ 'tiktok'.
 - Nhấn **"🚀 BẮT ĐẦU QUÉT & TẢI TẤT CẢ KÊNH (SIÊU TỐC)"**. Ứng dụng sẽ tự động tải lần lượt từng kênh vào các thư mục riêng (`@kenh1`, `@kenh2`, ...).
 
-### Cách 2: Chạy Dòng Lệnh (CLI)
+### Cách 3: Chạy Dòng Lệnh (CLI)
 - Mở terminal trong thư mục ứng dụng:
   ```powershell
   # Tải danh sách nhiều kênh trực tiếp từ dòng lệnh (cách nhau bằng dấu phẩy):
   .\.venv\Scripts\python.exe cli.py -c "@dung.mat_ket_noi, @openai, khaby.lame" --turbo
 
+  # Tải kèm tính năng tự động lọc từ nhạy cảm 'tiktok':
+  .\.venv\Scripts\python.exe cli.py -c "@openai" --turbo --censor
+
   # Tải danh sách kênh từ file văn bản (.txt):
   .\.venv\Scripts\python.exe cli.py -cf "danh_sach_kenh.txt" --turbo
   ```
-
-  # Tải với 16 luồng tối đa:
-  .\.venv\Scripts\python.exe cli.py -c "@khaby.lame" -w 16 -o "D:/TikTokVideos"
-  ```
-
----
-
-## 💻 Cú Pháp Dòng Lệnh Nâng Cao
-
-```bash
-# Tải 25 video mới nhất với 8 luồng:
-python cli.py -c "@openai" -l 25 -w 8
-
-# Tải toàn bộ kênh ở chế độ Turbo (12 luồng) kèm âm thanh gốc MP3:
-python cli.py -c "username" --turbo --audio
-
-# Tải danh sách link từ file văn bản:
-python cli.py -f "links.txt" --turbo
-
-# Quét và tự động sửa các video cũ bị lỗi chỉ có tiếng (tải lại video MP4 chuẩn):
-python cli.py --repair -o "./downloads"
-```
 
 ---
 
@@ -119,7 +121,7 @@ python cli.py --repair -o "./downloads"
 - Khi tải đa luồng tốc độ cao (6-16 luồng), máy chủ TikWM giới hạn 1 req/s trả về mã bận. Bộ giải mã phụ (yt-dlp) tự động tải luồng âm thanh duy nhất (`acodec: mp3`, `vcodec: none`) và lưu nhầm thành tệp `.mp4`.
 - Người dùng mở file lên xem thì chỉ nghe thấy tiếng mà không có hình.
 
-### 2. Giải pháp đã tích hợp trong bản cập nhật này:
+### 2. Giải pháp đã tích hợp:
 1. **Bộ Điều Tiết Tần Suất Thông Minh (Rate Limiter & Backoff):** Đồng bộ nhịp gọi API TikWM và SSSTik trên toàn bộ các luồng, đảm bảo 100% video đều lấy được link video MP4 gốc sạch watermark từ máy chủ.
 2. **Kiểm Tra Header Video Nghiêm Ngặt (`is_valid_mp4`):** Trước khi lưu tệp `.mp4`, hệ thống kiểm tra cấu trúc ISO Media Container (`ftyp`). Nếu phát hiện tệp chỉ chứa âm thanh thuần túy (header `ID3`), hệ thống lập tức loại bỏ và chuyển sang nguồn dự phòng khác.
 3. **Bộ Dựng Video Slide Ảnh Tự Động (`ffmpeg`):** Với các bài đăng dạng Album ảnh trên TikTok, hệ thống tự động tải toàn bộ ảnh HD và nhạc nền, sau đó dùng `ffmpeg` ghép thành một video MP4 chất lượng cao 1080p mượt mà với âm thanh gốc!
@@ -127,4 +129,3 @@ python cli.py --repair -o "./downloads"
    - Nếu bạn đã có các video cũ tải về trước đây bị lỗi chỉ có tiếng:
    - Chỉ cần **nhấp đúp vào `repair_audio_files.bat`** hoặc bấm nút **"🔧 Quét & Sửa Lỗi Các Video Bị Thiếu Hình"** trong tab **Cài Đặt** của phần mềm.
    - Ứng dụng sẽ tự động quét toàn bộ thư mục `downloads` và tải lại các video chuẩn thay thế cho bạn!
-

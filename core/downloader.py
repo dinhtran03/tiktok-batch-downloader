@@ -542,6 +542,20 @@ class BatchDownloader:
                 self.in_progress_count = max(0, self.in_progress_count - 1)
             return False
 
+        # Tùy chọn nâng cao: Tự động lọc từ nhạy cảm 'tiktok' (Cắt đoạn nói & Che logo chữ bằng sticker)
+        if self.options.enable_censorship and item.file_path and os.path.exists(item.file_path):
+            try:
+                from .censor import process_video_censorship
+                self.log(f"🛡️ [{index}/{total}] Đang kích hoạt bộ lọc bản quyền / nhạy cảm cho video #{item.id}...")
+                process_video_censorship(
+                    video_path=item.file_path,
+                    keywords_str=self.options.censor_keywords,
+                    custom_sticker_path=self.options.custom_sticker_path,
+                    log_callback=self.log
+                )
+            except Exception as censor_err:
+                self.log(f"⚠️ Lỗi khi lọc video #{item.id}: {censor_err} (Giữ video gốc)")
+
         # 6. Tải thêm ảnh bìa nếu được chọn
         if self.options.download_cover and item.cover_url:
             try:

@@ -51,6 +51,11 @@ class TikTokDownloaderApp(ctk.CTk):
         default_dl_dir = os.path.abspath(os.path.join(os.getcwd(), "downloads"))
         self.output_dir_var = ctk.StringVar(value=default_dl_dir)
 
+        # Tùy chọn lọc từ khóa nhạy cảm / bản quyền ('tiktok')
+        self.enable_censor_var = ctk.BooleanVar(value=False)
+        self.censor_keywords_var = ctk.StringVar(value="tiktok, tik tok, tóp tóp, toptop, douyin")
+        self.custom_sticker_var = ctk.StringVar(value="")
+
         # Xây dựng giao diện
         self._build_ui()
 
@@ -232,6 +237,14 @@ class TikTokDownloaderApp(ctk.CTk):
         self.custom_limit_entry.pack(side="left", padx=5)
         self.custom_limit_entry.configure(state="disabled")
 
+        self.quick_censor_check = ctk.CTkCheckBox(
+            opt_frame,
+            text="✂️ Lọc nhạy cảm 'tiktok'",
+            variable=self.enable_censor_var,
+            text_color="#64B5F6"
+        )
+        self.quick_censor_check.pack(side="right", padx=(10, 5))
+
         # Hàng nút điều khiển
         action_frame = ctk.CTkFrame(container, fg_color="transparent")
         action_frame.pack(fill="x", padx=15, pady=8)
@@ -304,6 +317,14 @@ class TikTokDownloaderApp(ctk.CTk):
             command=lambda: self.links_textbox.delete("1.0", "end")
         )
         clear_links_btn.pack(side="left", padx=(0, 10))
+
+        self.quick_censor_links_check = ctk.CTkCheckBox(
+            btn_row,
+            text="✂️ Lọc nhạy cảm 'tiktok'",
+            variable=self.enable_censor_var,
+            text_color="#64B5F6"
+        )
+        self.quick_censor_links_check.pack(side="left", padx=(0, 10))
 
         self.start_links_btn = ctk.CTkButton(
             btn_row,
@@ -391,6 +412,74 @@ class TikTokDownloaderApp(ctk.CTk):
         self.opt_save_metadata = ctk.CTkCheckBox(opts_group, text="Lưu thông tin chi tiết video dạng JSON (tiêu đề, lượt xem, thời gian, nhạc)")
         self.opt_save_metadata.pack(anchor="w", padx=25, pady=(5, 15))
 
+        # Nhóm cấu hình Lọc nhạy cảm & Bản quyền ("tiktok")
+        censor_group = ctk.CTkFrame(container)
+        censor_group.pack(fill="x", padx=15, pady=5)
+
+        censor_hdr = ctk.CTkLabel(
+            censor_group,
+            text="🛡️ Tùy Chọn Lọc Từ Nhạy Cảm & Bản Quyền ('tiktok'):",
+            font=ctk.CTkFont(weight="bold", size=14)
+        )
+        censor_hdr.pack(anchor="w", padx=15, pady=(10, 4))
+
+        censor_sub = ctk.CTkLabel(
+            censor_group,
+            text="Tự động cắt bỏ đoạn nói từ 'tiktok' (video ngắn lại) và dán đè Sticker/Logo lên vị trí chữ 'tiktok' trên khung hình.",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        censor_sub.pack(anchor="w", padx=25, pady=(0, 6))
+
+        self.censor_check = ctk.CTkCheckBox(
+            censor_group,
+            text="Kích hoạt tự động lọc từ nhạy cảm 'tiktok' (Bỏ tick nếu muốn tải video gốc nguyên bản)",
+            variable=self.enable_censor_var,
+            font=ctk.CTkFont(weight="bold")
+        )
+        self.censor_check.pack(anchor="w", padx=25, pady=5)
+
+        # Hàng chọn Sticker / Logo
+        sticker_row = ctk.CTkFrame(censor_group, fg_color="transparent")
+        sticker_row.pack(fill="x", padx=25, pady=4)
+
+        ctk.CTkLabel(sticker_row, text="Ảnh Sticker / Logo che chữ:").pack(side="left", padx=(0, 10))
+        self.sticker_entry = ctk.CTkEntry(
+            sticker_row,
+            textvariable=self.custom_sticker_var,
+            placeholder_text="Để trống sẽ dùng sticker ngôi sao mặc định (assets/default_sticker.png)",
+            width=360
+        )
+        self.sticker_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        ctk.CTkButton(
+            sticker_row,
+            text="Chọn ảnh...",
+            width=95,
+            command=self._browse_custom_sticker
+        ).pack(side="left", padx=(0, 6))
+
+        ctk.CTkButton(
+            sticker_row,
+            text="Mặc định",
+            width=80,
+            fg_color="gray",
+            hover_color="#555",
+            command=self._reset_default_sticker
+        ).pack(side="left")
+
+        # Hàng từ khóa lọc
+        kw_row = ctk.CTkFrame(censor_group, fg_color="transparent")
+        kw_row.pack(fill="x", padx=25, pady=(4, 12))
+
+        ctk.CTkLabel(kw_row, text="Từ khóa cần lọc:").pack(side="left", padx=(0, 10))
+        self.keywords_entry = ctk.CTkEntry(
+            kw_row,
+            textvariable=self.censor_keywords_var,
+            width=420
+        )
+        self.keywords_entry.pack(side="left", fill="x", expand=True)
+
         # Nhóm công cụ sửa chữa & bảo trì
         repair_group = ctk.CTkFrame(container)
         repair_group.pack(fill="x", padx=15, pady=5)
@@ -414,6 +503,21 @@ class TikTokDownloaderApp(ctk.CTk):
             command=self._start_repair_audio_files
         )
         self.repair_btn.pack(anchor="w", padx=25, pady=(0, 15))
+
+    def _browse_custom_sticker(self):
+        f = filedialog.askopenfilename(
+            title="Chọn ảnh Logo / Sticker che chữ 'tiktok'",
+            filetypes=[
+                ("Image files", "*.png;*.jpg;*.jpeg;*.webp"),
+                ("PNG (Nền trong suốt)", "*.png"),
+                ("Tất cả tệp", "*.*")
+            ]
+        )
+        if f:
+            self.custom_sticker_var.set(os.path.abspath(f))
+
+    def _reset_default_sticker(self):
+        self.custom_sticker_var.set("")
 
     def _start_repair_audio_files(self):
         """Khởi chạy tiến trình sửa các tệp video chỉ có tiếng trong thư mục tải về."""
@@ -824,7 +928,10 @@ class TikTokDownloaderApp(ctk.CTk):
                         save_metadata=bool(self.opt_save_metadata.get()),
                         skip_existing=bool(self.opt_skip_existing.get()),
                         max_workers=num_workers,
-                        limit_videos=cur_limit
+                        limit_videos=cur_limit,
+                        enable_censorship=bool(self.enable_censor_var.get()),
+                        censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin",
+                        custom_sticker_path=self.custom_sticker_var.get().strip() or None
                     )
 
                     self.active_downloader = BatchDownloader(options, browser_cookie=b_name)
@@ -969,7 +1076,10 @@ class TikTokDownloaderApp(ctk.CTk):
                     download_cover=bool(self.opt_download_cover.get()),
                     save_metadata=bool(self.opt_save_metadata.get()),
                     skip_existing=bool(self.opt_skip_existing.get()),
-                    max_workers=num_workers
+                    max_workers=num_workers,
+                    enable_censorship=bool(self.enable_censor_var.get()),
+                    censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin",
+                    custom_sticker_path=self.custom_sticker_var.get().strip() or None
                 )
 
                 chosen_cookie = self.cookie_option.get()
