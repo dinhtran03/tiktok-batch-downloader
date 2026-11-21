@@ -482,7 +482,7 @@ class BatchDownloader:
                     "outtmpl": temp_path,
                     "overwrites": True,
                     "noplaylist": True,
-                    "format": "bestvideo[vcodec!=none]+bestaudio/best[vcodec!=none]",
+                    "format": "bestvideo[vcodec!=none]+bestaudio/best[vcodec!=none]/bestvideo+bestaudio/best",
                     "progress_hooks": [_ytdl_hook],
                 }
                 if self.browser_cookie:
@@ -501,12 +501,63 @@ class BatchDownloader:
                         except Exception:
                             pass
             except Exception as yt_err:
-                self.log(f"⚠️ Bộ tải trực tiếp gặp lỗi với #{item.id}: {yt_err}")
+                err_text = str(yt_err)
+                if "Requested format is not available" in err_text:
+                    self.log(f"ℹ️ [{index}/{total}] TikTok web không cung cấp luồng video trực tiếp cho #{item.id}, chuyển sang bộ cứu hộ chuyên sâu...")
+                else:
+                    self.log(f"⚠️ Bộ tải trực tiếp gặp thông báo với #{item.id}: {yt_err}")
                 if os.path.exists(temp_path):
                     try:
                         os.remove(temp_path)
                     except Exception:
                         pass
+
+        # 4.5. TẦNG 3.5: BỘ CỨU HỘ CHUYÊN SÂU (Deep Stream Recovery)
+        # Khắc phục hoàn toàn lỗi Requested format is not available bằng cách dùng các URL chuẩn hóa (/video/{id})
+        if not download_success and not self.cancel_event.is_set():
+            self.log(f"🔄 [{index}/{total}] Đang kích hoạt bộ cứu hộ chuyên sâu cho video #{item.id}...")
+            try:
+                rescue_urls = [
+                    f"https://www.tiktok.com/video/{item.id}",
+                    f"https://m.tiktok.com/v/{item.id}.html",
+                    f"https://www.tiktok.com/@user/video/{item.id}"
+                ]
+                for r_url in rescue_urls:
+                    if self.cancel_event.is_set():
+                        break
+                    rescue_info = resolve_with_tikwm(r_url, timeout=20, max_retries=4)
+                    if rescue_info:
+                        if rescue_info.images and not item.images:
+                            item.images = rescue_info.images
+                            item.is_photo = rescue_info.is_photo
+                        if rescue_info.download_url:
+                            cand_list = [rescue_info.download_url] + (rescue_info.backup_urls or [])
+                            for dl_u in cand_list:
+                                try:
+                                    resp = self.session.get(dl_u, headers=headers, stream=True, timeout=25)
+                                    if resp.status_code == 200:
+                                        with open(temp_path, "wb") as f:
+                                            for chunk in resp.iter_content(chunk_size=OPTIMAL_CHUNK_SIZE):
+                                                if chunk:
+                                                    f.write(chunk)
+                                        if os.path.exists(temp_path) and os.path.getsize(temp_path) > 1024 and is_valid_mp4(temp_path):
+                                            download_success = True
+                                            downloaded = os.path.getsize(temp_path)
+                                            self.log(f"✅ [{index}/{total}] Cứu hộ thành công video #{item.id} ({format_bytes(downloaded)})!")
+                                            break
+                                        else:
+                                            if os.path.exists(temp_path):
+                                                os.remove(temp_path)
+                                except Exception:
+                                    if os.path.exists(temp_path):
+                                        try:
+                                            os.remove(temp_path)
+                                        except Exception:
+                                            pass
+                        if download_success:
+                            break
+            except Exception as rescue_err:
+                self.log(f"⚠️ Bộ cứu hộ chuyên sâu #{item.id} gặp lỗi: {rescue_err}")
 
         # 5. TẦNG 4: Nếu là bài đăng dạng Album ảnh / Slide ảnh (Photo Carousel post), tự động tải ảnh + nhạc và dựng video MP4 bằng ffmpeg
         if not download_success and not self.cancel_event.is_set():

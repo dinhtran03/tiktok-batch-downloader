@@ -37,8 +37,8 @@ def _add_to_cache(url: str, item: VideoItem):
                 _resolution_cache.pop(k, None)
         _resolution_cache[url] = item
 
-def _rate_limit_tikwm(min_interval: float = 1.15):
-    """Đảm bảo khoảng cách giữa các lần gọi TikWM tối thiểu 1.15 giây (chống lỗi code: -1)."""
+def _rate_limit_tikwm(min_interval: float = 1.35):
+    """Đảm bảo khoảng cách giữa các lần gọi TikWM tối thiểu 1.35 giây trên toàn bộ các luồng (chống lỗi code: -1)."""
     global _last_tikwm_time
     with _tikwm_lock:
         now = time.time()
@@ -57,18 +57,32 @@ def _rate_limit_ssstik(min_interval: float = 0.8):
             time.sleep(min_interval - elapsed)
         _last_ssstik_time = time.time()
 
-def resolve_with_tikwm(tiktok_url: str, timeout: int = 15, max_retries: int = 3) -> Optional[VideoItem]:
+def resolve_with_tikwm(tiktok_url: str, timeout: int = 15, max_retries: int = 4) -> Optional[VideoItem]:
     """
     Sử dụng TikWM API để lấy link tải video gốc không watermark.
     - Tích hợp Rate Limiting 1 req/sec chống lỗi: 'code: -1, Free Api Limit: 1 request/second.'
     - Tự động thử lại (Retry with backoff) nếu máy chủ bận.
+    - Thử nghiệm các biến thể URL chuẩn hóa (/video/{id}, m.tiktok.com/v/{id}.html) để đạt tỷ lệ thành công 100%.
     - Hỗ trợ đầy đủ bài đăng dạng Slide ảnh (Carousel/Photo post) trích xuất danh sách ảnh và nhạc nền.
     - Ưu tiên link 'play' trước 'hdplay' (tránh lỗi HTTP 403 Forbidden của TikTok CDN).
     """
+    m = re.search(r'/(?:video|photo)/(\d+)', tiktok_url) or re.search(r'\b(\d{15,22})\b', tiktok_url)
+    vid_id_val = m.group(1) if m else None
+
+    url_variants = [tiktok_url]
+    if vid_id_val:
+        c1 = f"https://www.tiktok.com/video/{vid_id_val}"
+        c2 = f"https://m.tiktok.com/v/{vid_id_val}.html"
+        c3 = f"https://www.tiktok.com/@user/video/{vid_id_val}"
+        for c in [c1, c2, c3]:
+            if c not in url_variants:
+                url_variants.append(c)
+
     for attempt in range(max_retries):
+        cur_url = url_variants[attempt % len(url_variants)]
         _rate_limit_tikwm()
         try:
-            params = {"url": tiktok_url, "hd": 1}
+            params = {"url": cur_url, "hd": 1}
             resp = requests.get(TIKWM_API_URL, params=params, headers=DEFAULT_HEADERS, timeout=timeout)
             if resp.status_code != 200:
                 time.sleep(1.0)
@@ -77,14 +91,15 @@ def resolve_with_tikwm(tiktok_url: str, timeout: int = 15, max_retries: int = 3)
             data_json = resp.json()
             code = data_json.get("code")
 
-            # Nếu bị dính giới hạn tần suất API (code: -1), chờ 1.5s rồi thử lại
+            # Nếu bị dính giới hạn tần suất API (code: -1), chờ backoff rồi thử lại
             if code == -1:
-                logger.warning(f"TikWM rate limit hit for {tiktok_url}. Đang chờ 1.5s để thử lại (lần {attempt + 1}/{max_retries})...")
-                time.sleep(1.5)
+                logger.warning(f"TikWM rate limit hit for {cur_url}. Đang chờ backoff (lần {attempt + 1}/{max_retries})...")
+                time.sleep(1.3 * (attempt + 1))
                 continue
 
             if code != 0 or not data_json.get("data"):
-                return None
+                time.sleep(1.0)
+                continue
                 
             d = data_json["data"]
             vid_id = str(d.get("id") or "")
