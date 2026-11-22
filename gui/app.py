@@ -56,6 +56,9 @@ class TikTokDownloaderApp(ctk.CTk):
         self.censor_keywords_var = ctk.StringVar(value="tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ")
         self.custom_sticker_var = ctk.StringVar(value="")
 
+        # Cấu hình giới hạn số lượng video tải (an toàn đa luồng, độc lập với Tkinter)
+        self.configured_limit: Optional[int] = None
+
         # Xây dựng giao diện
         self._build_ui()
 
@@ -225,17 +228,17 @@ class TikTokDownloaderApp(ctk.CTk):
             opt_frame,
             values=["Tất cả video (Toàn bộ kênh)", "10 video mới nhất", "25 video mới nhất", "50 video mới nhất", "100 video mới nhất", "Tùy chỉnh số lượng..."],
             command=self._on_limit_option_changed,
-            width=230
+            width=210
         )
         self.limit_option.pack(side="left", padx=5)
 
         self.custom_limit_entry = ctk.CTkEntry(
             opt_frame,
-            placeholder_text="Số lượng",
-            width=90
+            placeholder_text="Nhập số lượng (VD: 10)",
+            width=160
         )
         self.custom_limit_entry.pack(side="left", padx=5)
-        self.custom_limit_entry.configure(state="disabled")
+        self.custom_limit_entry.bind("<KeyRelease>", self._on_custom_limit_typed)
 
         self.quick_censor_check = ctk.CTkCheckBox(
             opt_frame,
@@ -761,29 +764,88 @@ class TikTokDownloaderApp(ctk.CTk):
         self._update_channels_count()
 
     def _on_limit_option_changed(self, choice: str):
-        if "Tùy chỉnh" in choice:
-            self.custom_limit_entry.configure(state="normal")
+        if "10 video" in choice:
+            self.configured_limit = 10
+            self.custom_limit_entry.delete(0, "end")
+            self.custom_limit_entry.insert(0, "10")
+        elif "25 video" in choice:
+            self.configured_limit = 25
+            self.custom_limit_entry.delete(0, "end")
+            self.custom_limit_entry.insert(0, "25")
+        elif "50 video" in choice:
+            self.configured_limit = 50
+            self.custom_limit_entry.delete(0, "end")
+            self.custom_limit_entry.insert(0, "50")
+        elif "100 video" in choice:
+            self.configured_limit = 100
+            self.custom_limit_entry.delete(0, "end")
+            self.custom_limit_entry.insert(0, "100")
+        elif "Tùy chỉnh" in choice:
             self.custom_limit_entry.focus()
+            txt = self.custom_limit_entry.get().strip()
+            try:
+                val = int(txt)
+                self.configured_limit = val if val > 0 else None
+            except ValueError:
+                self.configured_limit = None
         else:
-            self.custom_limit_entry.configure(state="disabled")
+            # Tất cả video (Toàn bộ kênh)
+            self.configured_limit = None
+            self.custom_limit_entry.delete(0, "end")
+
+    def _on_custom_limit_typed(self, event=None):
+        txt = self.custom_limit_entry.get().strip()
+        if txt:
+            try:
+                val = int(txt)
+                if val > 0:
+                    self.configured_limit = val
+                    if val == 10:
+                        self.limit_option.set("10 video mới nhất")
+                    elif val == 25:
+                        self.limit_option.set("25 video mới nhất")
+                    elif val == 50:
+                        self.limit_option.set("50 video mới nhất")
+                    elif val == 100:
+                        self.limit_option.set("100 video mới nhất")
+                    else:
+                        self.limit_option.set("Tùy chỉnh số lượng...")
+                    return
+            except ValueError:
+                pass
+        self.configured_limit = None
+        self.limit_option.set("Tất cả video (Toàn bộ kênh)")
 
     def _get_current_limit(self) -> Optional[int]:
-        """Lấy giá trị giới hạn số lượng video hiện tại từ giao diện."""
-        limit_choice = self.limit_option.get()
-        if "10 video" in limit_choice:
-            return 10
-        elif "25 video" in limit_choice:
-            return 25
-        elif "50 video" in limit_choice:
-            return 50
-        elif "100 video" in limit_choice:
-            return 100
-        elif "Tùy chỉnh" in limit_choice:
-            try:
-                val = int(self.custom_limit_entry.get().strip())
-                return val if val > 0 else None
-            except ValueError:
-                return None
+        """Lấy giá trị giới hạn số lượng video (ưu tiên số người dùng nhập, đồng bộ 2 chiều)."""
+        try:
+            txt = self.custom_limit_entry.get().strip()
+            if txt:
+                val = int(txt)
+                if val > 0:
+                    self.configured_limit = val
+                    return val
+        except Exception:
+            pass
+
+        try:
+            choice = self.limit_option.get()
+            if "10 video" in choice:
+                self.configured_limit = 10
+                return 10
+            elif "25 video" in choice:
+                self.configured_limit = 25
+                return 25
+            elif "50 video" in choice:
+                self.configured_limit = 50
+                return 50
+            elif "100 video" in choice:
+                self.configured_limit = 100
+                return 100
+        except Exception:
+            pass
+
+        self.configured_limit = None
         return None
 
     def _import_links_file(self):
@@ -804,6 +866,7 @@ class TikTokDownloaderApp(ctk.CTk):
         if self.active_downloader.is_paused:
             # Luôn kiểm tra và cập nhật cấu hình số lượng giới hạn mới nhất từ giao diện khi tiếp tục!
             cur_limit = self._get_current_limit()
+            self.configured_limit = cur_limit
             self.active_downloader.options.limit_videos = cur_limit
             if cur_limit is not None:
                 self.log(f"⚙️ Giới hạn áp dụng khi tiếp tục: {cur_limit} video mỗi kênh.")
@@ -853,11 +916,31 @@ class TikTokDownloaderApp(ctk.CTk):
             messagebox.showerror("Sai định dạng", "Không nhận diện được link kênh hoặc username TikTok hợp lệ nào!")
             return
 
-        # Xác định số lượng video cần tải mỗi kênh
+        # Xác định số lượng video cần tải mỗi kênh trên Main Thread
         limit_val = self._get_current_limit()
-        if "Tùy chỉnh" in self.limit_option.get() and limit_val is None:
-            messagebox.showwarning("Số lượng không hợp lệ", "Vui lòng nhập một số nguyên dương vào ô tùy chỉnh!")
-            return
+        self.configured_limit = limit_val
+
+        # Thu thập trước toàn bộ cấu hình từ giao diện trên Main Thread để đảm bảo an toàn tuyệt đối đa luồng
+        num_workers = int(self.workers_slider.get())
+        chosen_cookie = self.cookie_option.get()
+        b_name = None
+        if "Chrome" in chosen_cookie:
+            b_name = "chrome"
+        elif "Edge" in chosen_cookie:
+            b_name = "edge"
+        elif "Firefox" in chosen_cookie:
+            b_name = "firefox"
+        elif "Brave" in chosen_cookie:
+            b_name = "brave"
+
+        base_dir = self.output_dir_var.get()
+        opt_dl_audio = bool(self.opt_download_audio.get())
+        opt_dl_cover = bool(self.opt_download_cover.get())
+        opt_save_meta = bool(self.opt_save_metadata.get())
+        opt_skip_exist = bool(self.opt_skip_existing.get())
+        opt_censor = bool(self.enable_censor_var.get())
+        opt_keywords = self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ"
+        opt_sticker = self.custom_sticker_var.get().strip() or None
 
         # Dọn dẹp phiên tải cũ nếu đang chạy hoặc tạm dừng
         if self.is_running or (self.active_downloader and self.active_downloader.is_paused):
@@ -887,22 +970,7 @@ class TikTokDownloaderApp(ctk.CTk):
             grand_failed = 0
 
             try:
-                num_workers = int(self.workers_slider.get())
                 self.log(f"⚡ Đã kích hoạt {num_workers} luồng tải song song (Pipeline Mode)")
-
-                # Xác định cookie trình duyệt nếu được chọn
-                chosen_cookie = self.cookie_option.get()
-                b_name = None
-                if "Chrome" in chosen_cookie:
-                    b_name = "chrome"
-                elif "Edge" in chosen_cookie:
-                    b_name = "edge"
-                elif "Firefox" in chosen_cookie:
-                    b_name = "firefox"
-                elif "Brave" in chosen_cookie:
-                    b_name = "brave"
-
-                base_dir = self.output_dir_var.get()
 
                 # Vòng lặp tải từng kênh trong danh sách
                 for ch_idx, username in enumerate(channels, 1):
@@ -910,28 +978,29 @@ class TikTokDownloaderApp(ctk.CTk):
                         self.log(f"⏹️ Đã dừng danh sách kênh tại kênh thứ {ch_idx}/{total_channels}.")
                         break
 
+                    # Lấy giới hạn an toàn từ self.configured_limit (không truy cập Tkinter widget từ background thread)
+                    cur_limit = self.configured_limit
+                    cur_limit_desc = f"{cur_limit} video" if cur_limit else "Toàn bộ video"
+
                     self.log(f"\n{'='*55}")
-                    self.log(f"🎬 [Kênh {ch_idx}/{total_channels}] Bắt đầu quét & tải kênh @{username} ...")
+                    self.log(f"🎬 [Kênh {ch_idx}/{total_channels}] Bắt đầu quét & tải kênh @{username} (Giới hạn: {cur_limit_desc}) ...")
                     self.log(f"{'='*55}")
 
                     channel_dir = os.path.join(base_dir, f"@{username}")
                     os.makedirs(channel_dir, exist_ok=True)
 
-                    # Luôn kiểm tra lại limit_val mới nhất từ giao diện nếu người dùng đã đổi
-                    cur_limit = self._get_current_limit()
-
                     options = DownloadOptions(
                         output_dir=channel_dir,
                         download_video=True,
-                        download_audio=bool(self.opt_download_audio.get()),
-                        download_cover=bool(self.opt_download_cover.get()),
-                        save_metadata=bool(self.opt_save_metadata.get()),
-                        skip_existing=bool(self.opt_skip_existing.get()),
+                        download_audio=opt_dl_audio,
+                        download_cover=opt_dl_cover,
+                        save_metadata=opt_save_meta,
+                        skip_existing=opt_skip_exist,
                         max_workers=num_workers,
                         limit_videos=cur_limit,
-                        enable_censorship=bool(self.enable_censor_var.get()),
-                        censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ",
-                        custom_sticker_path=self.custom_sticker_var.get().strip() or None
+                        enable_censorship=opt_censor,
+                        censor_keywords=opt_keywords,
+                        custom_sticker_path=opt_sticker
                     )
 
                     self.active_downloader = BatchDownloader(options, browser_cookie=b_name)
@@ -1042,6 +1111,27 @@ class TikTokDownloaderApp(ctk.CTk):
         dest_dir = self.output_dir_var.get()
         os.makedirs(dest_dir, exist_ok=True)
 
+        # Thu thập trước toàn bộ cấu hình từ giao diện trên Main Thread để đảm bảo an toàn tuyệt đối đa luồng
+        num_workers = int(self.workers_slider.get())
+        chosen_cookie = self.cookie_option.get()
+        b_name = None
+        if "Chrome" in chosen_cookie:
+            b_name = "chrome"
+        elif "Edge" in chosen_cookie:
+            b_name = "edge"
+        elif "Firefox" in chosen_cookie:
+            b_name = "firefox"
+        elif "Brave" in chosen_cookie:
+            b_name = "brave"
+
+        opt_dl_audio = bool(self.opt_download_audio.get())
+        opt_dl_cover = bool(self.opt_download_cover.get())
+        opt_save_meta = bool(self.opt_save_metadata.get())
+        opt_skip_exist = bool(self.opt_skip_existing.get())
+        opt_censor = bool(self.enable_censor_var.get())
+        opt_keywords = self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ"
+        opt_sticker = self.custom_sticker_var.get().strip() or None
+
         # Dọn dẹp phiên tải cũ nếu đang chạy hoặc tạm dừng
         if self.is_running or (self.active_downloader and self.active_downloader.is_paused):
             self.cancel_event.set()
@@ -1061,7 +1151,6 @@ class TikTokDownloaderApp(ctk.CTk):
 
         def _worker():
             try:
-                num_workers = int(self.workers_slider.get())
                 videos: List[VideoItem] = []
                 for idx, u in enumerate(urls, 1):
                     if session_cancel_event.is_set() or self.current_session_id != current_session:
@@ -1072,26 +1161,15 @@ class TikTokDownloaderApp(ctk.CTk):
                 options = DownloadOptions(
                     output_dir=dest_dir,
                     download_video=True,
-                    download_audio=bool(self.opt_download_audio.get()),
-                    download_cover=bool(self.opt_download_cover.get()),
-                    save_metadata=bool(self.opt_save_metadata.get()),
-                    skip_existing=bool(self.opt_skip_existing.get()),
+                    download_audio=opt_dl_audio,
+                    download_cover=opt_dl_cover,
+                    save_metadata=opt_save_meta,
+                    skip_existing=opt_skip_exist,
                     max_workers=num_workers,
-                    enable_censorship=bool(self.enable_censor_var.get()),
-                    censor_keywords=self.censor_keywords_var.get().strip() or "tiktok, tik tok, tóp tóp, toptop, douyin, tiktokshop, tiktok shop, tik tok shop, tích tốc, tích tốc xốp, tíchtốc, tíchtốcxốp, cháy, nổ",
-                    custom_sticker_path=self.custom_sticker_var.get().strip() or None
+                    enable_censorship=opt_censor,
+                    censor_keywords=opt_keywords,
+                    custom_sticker_path=opt_sticker
                 )
-
-                chosen_cookie = self.cookie_option.get()
-                b_name = None
-                if "Chrome" in chosen_cookie:
-                    b_name = "chrome"
-                elif "Edge" in chosen_cookie:
-                    b_name = "edge"
-                elif "Firefox" in chosen_cookie:
-                    b_name = "firefox"
-                elif "Brave" in chosen_cookie:
-                    b_name = "brave"
 
                 self.active_downloader = BatchDownloader(options, browser_cookie=b_name)
                 self.active_downloader.log_callback = self.log

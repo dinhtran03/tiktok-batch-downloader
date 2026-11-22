@@ -58,6 +58,11 @@ def scan_channel_videos(
         from gallery_dl.extractor import find
 
         gallery_dl.config.load()
+        if limit and limit > 0:
+            gallery_dl.config.set(('extractor', 'tiktok'), 'tiktok-range', f'1-{limit}')
+        else:
+            gallery_dl.config.set(('extractor', 'tiktok'), 'tiktok-range', '')
+
         extr_cls = find(target_url)
         if not extr_cls:
             log(f"❌ Không tìm thấy bộ trích xuất phù hợp cho {target_url}")
@@ -77,6 +82,11 @@ def scan_channel_videos(
 
         log("🔐 Đang kết nối và xác thực với máy chủ TikTok...")
         extr.initialize()
+
+        if limit and limit > 0:
+            import gallery_dl.util as gdl_util
+            extr.range = f"1-{limit}"
+            extr.range_predicate = gdl_util.predicate_range_parse(extr.range)
 
         # Bắt đầu duyệt danh sách bài đăng từ kênh
         log("📋 Đang lấy danh sách các video đã đăng...")
@@ -169,6 +179,7 @@ def scan_channel_videos(
                 log(f"🔎 Đã tìm thấy {len(videos)} video từ kênh @{username} ...")
 
             if limit and len(videos) >= limit:
+                log(f"🎯 Đã đạt đủ giới hạn quét {limit} video mới nhất theo yêu cầu cho @{username}.")
                 break
 
         log(f"✅ Hoàn tất quét kênh @{username}! Tìm thấy tổng cộng: {len(videos)} video.")
