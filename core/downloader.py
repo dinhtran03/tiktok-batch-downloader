@@ -393,7 +393,13 @@ class BatchDownloader:
                 break
 
             try:
-                resp = self.session.get(cand_url, headers=headers, stream=True, timeout=20)
+                dl_headers = dict(headers)
+                if "tikwm.com" in cand_url.lower():
+                    dl_headers["Referer"] = "https://www.tikwm.com/"
+                else:
+                    dl_headers["Referer"] = "https://www.tiktok.com/"
+
+                resp = self.session.get(cand_url, headers=dl_headers, stream=True, timeout=20)
                 if resp.status_code == 200:
                     total_size = int(resp.headers.get("content-length", 0))
                     item.total_bytes = total_size
@@ -520,12 +526,11 @@ class BatchDownloader:
                 rescue_urls = [
                     f"https://www.tiktok.com/video/{item.id}",
                     f"https://m.tiktok.com/v/{item.id}.html",
-                    f"https://www.tiktok.com/@user/video/{item.id}"
                 ]
                 for r_url in rescue_urls:
                     if self.cancel_event.is_set():
                         break
-                    rescue_info = resolve_with_tikwm(r_url, timeout=20, max_retries=4)
+                    rescue_info = resolve_with_tikwm(r_url, timeout=20, max_retries=3)
                     if rescue_info:
                         if rescue_info.images and not item.images:
                             item.images = rescue_info.images
@@ -534,7 +539,13 @@ class BatchDownloader:
                             cand_list = [rescue_info.download_url] + (rescue_info.backup_urls or [])
                             for dl_u in cand_list:
                                 try:
-                                    resp = self.session.get(dl_u, headers=headers, stream=True, timeout=25)
+                                    dl_headers = dict(headers)
+                                    if "tikwm.com" in dl_u.lower():
+                                        dl_headers["Referer"] = "https://www.tikwm.com/"
+                                    else:
+                                        dl_headers["Referer"] = "https://www.tiktok.com/"
+
+                                    resp = self.session.get(dl_u, headers=dl_headers, stream=True, timeout=25)
                                     if resp.status_code == 200:
                                         with open(temp_path, "wb") as f:
                                             for chunk in resp.iter_content(chunk_size=OPTIMAL_CHUNK_SIZE):

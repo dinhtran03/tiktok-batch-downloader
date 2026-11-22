@@ -15,11 +15,16 @@ DEFAULT_HEADERS = {
     "Referer": "https://www.tikwm.com/",
 }
 
-# Khóa đồng bộ và bộ điều tiết tần suất gọi API (Rate Limiter)
-# TikWM giới hạn nghiêm ngặt 1 yêu cầu / giây trên mỗi IP.
-# Bộ điều tiết đảm bảo giữa 2 lần gọi liên tiếp luôn cách nhau tối thiểu 1.15 giây trên mọi luồng.
+# Khóa tuần tự hóa toàn cục và điều tiết tần suất gọi API TikWM (Rate Limiter)
+# TikWM áp dụng hạn ngạch nghiêm ngặt 1 yêu cầu / giây trên mỗi IP.
+# Để đảm bảo hoạt động an toàn 100% trong môi trường đa luồng (kể cả 16-32 workers chạy cùng lúc):
+# 1. Khóa _tikwm_lock bao trọn TOÀN BỘ quá trình kiểm tra thời gian, gửi HTTP request và nhận phản hồi.
+# 2. Khoảng cách tối thiểu giữa 2 lần hoàn tất yêu cầu là 1.6 giây (trừ hao độ trễ mạng và chênh lệch xung nhịp).
+# 3. Nếu gặp code: -1 (Free Api Limit), luồng hiện tại GIỮ NGUYÊN KHÓA và sleep 2.5s để TikWM reset window,
+#    ngăn chặn triệt để hiện tượng retry storm từ các luồng khác.
 _tikwm_lock = threading.Lock()
-_last_tikwm_time = 0.0
+_last_tikwm_finish_time = 0.0
+MIN_TIKWM_INTERVAL = 1.6
 
 _ssstik_lock = threading.Lock()
 _last_ssstik_time = 0.0
@@ -37,15 +42,42 @@ def _add_to_cache(url: str, item: VideoItem):
                 _resolution_cache.pop(k, None)
         _resolution_cache[url] = item
 
-def _rate_limit_tikwm(min_interval: float = 1.35):
-    """Đảm bảo khoảng cách giữa các lần gọi TikWM tối thiểu 1.35 giây trên toàn bộ các luồng (chống lỗi code: -1)."""
-    global _last_tikwm_time
+def _call_tikwm_api_serialized(cur_url: str, timeout: int = 15, max_inner_retries: int = 4) -> Optional[dict]:
+    """
+    Thực hiện gọi API TikWM an toàn tuyệt đối với khóa tuần tự hóa toàn cục (Global Serialization Lock).
+    Mọi luồng tải đều phải xếp hàng qua cổng này. Đảm bảo:
+    1. Giữa hai lần hoàn tất request luôn cách nhau tối thiểu 1.6 giây.
+    2. Toàn bộ quá trình HTTP request và phản hồi nằm trọn vẹn trong khóa.
+    3. Nếu dính code: -1 (Free Api Limit), lập tức giữ khóa và nghỉ backoff 2.5s để làm sạch cửa sổ giới hạn trên máy chủ TikWM trước khi bất kỳ luồng nào khác được gọi.
+    """
+    global _last_tikwm_finish_time
     with _tikwm_lock:
-        now = time.time()
-        elapsed = now - _last_tikwm_time
-        if elapsed < min_interval:
-            time.sleep(min_interval - elapsed)
-        _last_tikwm_time = time.time()
+        for attempt in range(max_inner_retries):
+            now = time.time()
+            elapsed = now - _last_tikwm_finish_time
+            if elapsed < MIN_TIKWM_INTERVAL:
+                time.sleep(MIN_TIKWM_INTERVAL - elapsed)
+            try:
+                params = {"url": cur_url, "hd": 1}
+                resp = requests.get(TIKWM_API_URL, params=params, headers=DEFAULT_HEADERS, timeout=timeout)
+                _last_tikwm_finish_time = time.time()
+                if resp.status_code == 200:
+                    data_json = resp.json()
+                    code = data_json.get("code")
+                    if code == -1:
+                        logger.warning(f"TikWM báo code: -1 (Free Api Limit) cho {cur_url}. Giữ khóa chờ 2.5s để reset window (lần {attempt + 1}/{max_inner_retries})...")
+                        time.sleep(2.5)
+                        _last_tikwm_finish_time = time.time()
+                        continue
+                    return data_json
+                else:
+                    time.sleep(1.0)
+                    _last_tikwm_finish_time = time.time()
+            except Exception as e:
+                logger.debug(f"TikWM request exception ({cur_url}): {e}")
+                time.sleep(1.0)
+                _last_tikwm_finish_time = time.time()
+        return None
 
 def _rate_limit_ssstik(min_interval: float = 0.8):
     """Điều tiết tần suất gọi SSSTik chống nghẽn mạng và chặn bot."""
@@ -57,114 +89,96 @@ def _rate_limit_ssstik(min_interval: float = 0.8):
             time.sleep(min_interval - elapsed)
         _last_ssstik_time = time.time()
 
-def resolve_with_tikwm(tiktok_url: str, timeout: int = 15, max_retries: int = 4) -> Optional[VideoItem]:
+def resolve_with_tikwm(tiktok_url: str, timeout: int = 15, max_retries: int = 3) -> Optional[VideoItem]:
     """
     Sử dụng TikWM API để lấy link tải video gốc không watermark.
-    - Tích hợp Rate Limiting 1 req/sec chống lỗi: 'code: -1, Free Api Limit: 1 request/second.'
-    - Tự động thử lại (Retry with backoff) nếu máy chủ bận.
-    - Thử nghiệm các biến thể URL chuẩn hóa (/video/{id}, m.tiktok.com/v/{id}.html) để đạt tỷ lệ thành công 100%.
+    - Tuần tự hóa toàn cục với Rate Limiting 1 req/sec chống lỗi: 'code: -1, Free Api Limit: 1 request/second.'
+    - Tự động thử nghiệm các biến thể URL chuẩn hóa sạch tham số (/video/{id}, m.tiktok.com/v/{id}.html) để đạt tỷ lệ thành công 100%.
     - Hỗ trợ đầy đủ bài đăng dạng Slide ảnh (Carousel/Photo post) trích xuất danh sách ảnh và nhạc nền.
     - Ưu tiên link 'play' trước 'hdplay' (tránh lỗi HTTP 403 Forbidden của TikTok CDN).
     """
     m = re.search(r'/(?:video|photo)/(\d+)', tiktok_url) or re.search(r'\b(\d{15,22})\b', tiktok_url)
     vid_id_val = m.group(1) if m else None
 
-    url_variants = [tiktok_url]
+    # Ưu tiên URL chuẩn hóa /video/{id} đầu tiên vì máy chủ TikWM tối ưu nhất với URL sạch
+    url_variants = []
     if vid_id_val:
-        c1 = f"https://www.tiktok.com/video/{vid_id_val}"
-        c2 = f"https://m.tiktok.com/v/{vid_id_val}.html"
-        c3 = f"https://www.tiktok.com/@user/video/{vid_id_val}"
-        for c in [c1, c2, c3]:
-            if c not in url_variants:
-                url_variants.append(c)
+        url_variants.append(f"https://www.tiktok.com/video/{vid_id_val}")
+        url_variants.append(f"https://m.tiktok.com/v/{vid_id_val}.html")
+    if tiktok_url not in url_variants:
+        url_variants.append(tiktok_url)
 
     for attempt in range(max_retries):
         cur_url = url_variants[attempt % len(url_variants)]
-        _rate_limit_tikwm()
-        try:
-            params = {"url": cur_url, "hd": 1}
-            resp = requests.get(TIKWM_API_URL, params=params, headers=DEFAULT_HEADERS, timeout=timeout)
-            if resp.status_code != 200:
-                time.sleep(1.0)
-                continue
-                
-            data_json = resp.json()
-            code = data_json.get("code")
-
-            # Nếu bị dính giới hạn tần suất API (code: -1), chờ backoff rồi thử lại
-            if code == -1:
-                logger.warning(f"TikWM rate limit hit for {cur_url}. Đang chờ backoff (lần {attempt + 1}/{max_retries})...")
-                time.sleep(1.3 * (attempt + 1))
-                continue
-
-            if code != 0 or not data_json.get("data"):
-                time.sleep(1.0)
-                continue
-                
-            d = data_json["data"]
-            vid_id = str(d.get("id") or "")
-            title = d.get("title") or ""
-            author = d.get("author", {})
-            user = author.get("unique_id") or author.get("nickname") or ""
+        data_json = _call_tikwm_api_serialized(cur_url, timeout=timeout)
+        if not data_json:
+            continue
             
-            # Thu thập danh sách các link video ứng viên
-            candidate_urls = []
+        code = data_json.get("code")
+        if code != 0 or not data_json.get("data"):
+            continue
             
-            # 1. 'play': Luôn mở public và không bị khóa theo IP
-            play_url = d.get("play")
-            if play_url:
-                if play_url.startswith("/"):
-                    play_url = "https://www.tikwm.com" + play_url
-                candidate_urls.append(play_url)
+        d = data_json["data"]
+        vid_id = str(d.get("id") or vid_id_val or "")
+        title = d.get("title") or ""
+        author = d.get("author", {})
+        user = author.get("unique_id") or author.get("nickname") or ""
+        
+        # Thu thập danh sách các link video ứng viên
+        candidate_urls = []
+        
+        # 1. 'play': Luôn mở public và không bị khóa theo IP
+        play_url = d.get("play")
+        if play_url:
+            if play_url.startswith("/"):
+                play_url = "https://www.tikwm.com" + play_url
+            candidate_urls.append(play_url)
+            
+        # 2. 'hdplay': HD bitrate (dùng làm dự phòng)
+        hdplay_url = d.get("hdplay")
+        if hdplay_url:
+            if hdplay_url.startswith("/"):
+                hdplay_url = "https://www.tikwm.com" + hdplay_url
+            if hdplay_url not in candidate_urls:
+                candidate_urls.append(hdplay_url)
                 
-            # 2. 'hdplay': HD bitrate (dùng làm dự phòng)
-            hdplay_url = d.get("hdplay")
-            if hdplay_url:
-                if hdplay_url.startswith("/"):
-                    hdplay_url = "https://www.tikwm.com" + hdplay_url
-                if hdplay_url not in candidate_urls:
-                    candidate_urls.append(hdplay_url)
-                    
-            # Link nhạc nền
-            music_url = d.get("music")
-            if music_url and music_url.startswith("/"):
-                music_url = "https://www.tikwm.com" + music_url
-                
-            # Link ảnh bìa
-            cover_url = d.get("cover")
-            if cover_url and cover_url.startswith("/"):
-                cover_url = "https://www.tikwm.com" + cover_url
+        # Link nhạc nền
+        music_url = d.get("music")
+        if music_url and music_url.startswith("/"):
+            music_url = "https://www.tikwm.com" + music_url
+            
+        # Link ảnh bìa
+        cover_url = d.get("cover")
+        if cover_url and cover_url.startswith("/"):
+            cover_url = "https://www.tikwm.com" + cover_url
 
-            # Danh sách ảnh slide (nếu là bài đăng dạng Album ảnh / Photo Carousel)
-            raw_images = d.get("images") or []
-            slide_images = []
-            for img in raw_images:
-                if img:
-                    if img.startswith("/"):
-                        img = "https://www.tikwm.com" + img
-                    slide_images.append(img)
+        # Danh sách ảnh slide (nếu là bài đăng dạng Album ảnh / Photo Carousel)
+        raw_images = d.get("images") or []
+        slide_images = []
+        for img in raw_images:
+            if img:
+                if img.startswith("/"):
+                    img = "https://www.tikwm.com" + img
+                slide_images.append(img)
 
-            primary_url = candidate_urls[0] if candidate_urls else None
-            backup_urls = candidate_urls[1:] if len(candidate_urls) > 1 else []
+        primary_url = candidate_urls[0] if candidate_urls else None
+        backup_urls = candidate_urls[1:] if len(candidate_urls) > 1 else []
 
-            return VideoItem(
-                id=vid_id,
-                url=tiktok_url,
-                title=title,
-                user=user,
-                create_time=d.get("create_time"),
-                duration=d.get("duration"),
-                download_url=primary_url,
-                backup_urls=backup_urls,
-                cover_url=cover_url,
-                music_url=music_url,
-                images=slide_images,
-                is_photo=bool(slide_images),
-                status=DownloadStatus.QUEUED,
-            )
-        except Exception as exc:
-            logger.debug(f"TikWM resolve error on attempt {attempt + 1} for {tiktok_url}: {exc}")
-            time.sleep(1.0)
+        return VideoItem(
+            id=vid_id,
+            url=tiktok_url,
+            title=title,
+            user=user,
+            create_time=d.get("create_time"),
+            duration=d.get("duration"),
+            download_url=primary_url,
+            backup_urls=backup_urls,
+            cover_url=cover_url,
+            music_url=music_url,
+            images=slide_images,
+            is_photo=bool(slide_images),
+            status=DownloadStatus.QUEUED,
+        )
 
     return None
 
